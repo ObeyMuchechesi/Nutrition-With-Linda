@@ -9,6 +9,7 @@ import {
   Heart,
   Leaf,
   MapPin,
+  MessageCircle,
   Menu,
   Phone,
   Salad,
@@ -185,6 +186,18 @@ function App() {
           <span>Real people. Lasting change.</span>
         </div>
       </footer>
+
+      <a
+        className="whatsapp-float"
+        href="https://wa.me/263784909690?text=Hi%20Linda%2C%20I%27d%20like%20to%20ask%20about%20a%20nutrition%20consultation."
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Chat with Linda on WhatsApp"
+        title="Chat with us on WhatsApp"
+      >
+        <MessageCircle size={25} strokeWidth={2.1} aria-hidden="true" />
+        <span>Chat on WhatsApp</span>
+      </a>
 
       {isModalOpen && <BookingModal onClose={() => setIsModalOpen(false)} />}
     </div>

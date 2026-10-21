@@ -129,6 +129,10 @@ a { color: inherit; text-decoration: none; }
 .booking-success h2 { margin: 13px 0 12px; }
 .booking-success .button { margin-top: 25px; }
 
+.whatsapp-float { position: fixed; z-index: 30; right: 25px; bottom: 25px; display: inline-flex; min-height: 58px; align-items: center; justify-content: center; gap: 10px; border-radius: 999px; background: #168b4b; padding: 0 19px; color: #fff; box-shadow: 0 8px 25px rgba(21, 76, 44, .25); transition: background .2s ease, transform .2s ease, box-shadow .2s ease; }
+.whatsapp-float:hover { transform: translateY(-3px); background: #11753f; box-shadow: 0 12px 30px rgba(21, 76, 44, .3); }
+.whatsapp-float span { font-size: 12px; font-weight: 700; }
+
 @media (max-width: 900px) {
   .hero-grid { min-height: auto; gap: 40px; }
   .hero-heading { font-size: clamp(46px, 7vw, 67px); }
@@ -188,6 +192,7 @@ a { color: inherit; text-decoration: none; }
   .footer-brand { justify-self: start; text-align: left; }
   .footer-bottom { gap: 12px; font-size: 8px; }
   .booking-modal { padding-top: 39px; }
+  .whatsapp-float { right: 16px; bottom: 16px; min-height: 54px; padding: 0 16px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

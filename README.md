@@ -15,4 +15,18 @@ The site is available at `http://localhost:5173`; Vite forwards `/api` requests 
 
 The frontend and Express API are deployed together on Vercel. Set `MONGO_URI` in the Vercel project's Production environment, then deploy with `vercel --prod`. The API stores booking requests in the `nutrition_db` database.
 
+## Admin dashboard
+
+Open `/admin` on the deployed site. The dashboard is protected by a single admin sign-in configured through server-side environment variables. Add these to the Vercel project's Production environment and mark each value as sensitive:
+
+- `ADMIN_EMAIL`: the email used to sign in
+- `ADMIN_PASSWORD`: a unique password with at least 12 characters
+- `ADMIN_SESSION_SECRET`: a random secret with at least 32 characters; generate one with `node -e "console.log(require('node:crypto').randomBytes(48).toString('hex'))"`
+
+Redeploy after setting the variables. The dashboard shows total and pending requests, upcoming consultations, requests this month, a six-month trend, and a searchable, paginated booking list. Admins can update request statuses. Existing bookings without a status appear as pending.
+
+The admin API uses an HTTP-only, secure production session cookie. The password and session secret must stay in Vercel's sensitive environment settings and must never be committed to Git.
+
+The public site's floating WhatsApp button opens a chat to `+263 78 490 9690`.
+
 The database URI is a secret. Keep it in `.env` locally and in Vercel's environment settings; never commit it to Git.
