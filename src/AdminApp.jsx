@@ -1,3 +1,5 @@
+'use client';
+
 import { useEffect, useState } from 'react';
 import {
   Activity,
@@ -19,8 +21,6 @@ import {
   Trash2,
   UsersRound,
 } from 'lucide-react';
-import './admin.css';
-
 const PAGE_SIZE = 25;
 const BOOKING_STATUSES = ['pending', 'confirmed', 'completed', 'cancelled'];
 

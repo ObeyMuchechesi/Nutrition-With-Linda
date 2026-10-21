@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react';
+'use client';
+
+import { useState } from 'react';
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -32,24 +34,10 @@ function Brand({ light = false }) {
   );
 }
 
-function App() {
+function App({ initialSiteContent = defaultSiteContent }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [siteContent, setSiteContent] = useState(defaultSiteContent);
-
-  useEffect(() => {
-    let isCurrent = true;
-    fetch('/api/site-content', { cache: 'no-store' })
-      .then(async (response) => {
-        if (!response.ok) return null;
-        return response.json();
-      })
-      .then((data) => {
-        if (isCurrent && data?.content) setSiteContent({ ...defaultSiteContent, ...data.content });
-      })
-      .catch(() => {});
-    return () => { isCurrent = false; };
-  }, []);
+  const [siteContent] = useState(() => ({ ...defaultSiteContent, ...initialSiteContent }));
 
   const phoneHref = siteContent.phone.replace(/[^\d+]/g, '');
   const whatsappNumber = siteContent.whatsappNumber.replace(/\D/g, '');

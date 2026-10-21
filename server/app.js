@@ -3,6 +3,8 @@ const express = require('express');
 const mongoose = require('mongoose');
 const crypto = require('node:crypto');
 const DEFAULT_SITE_CONTENT = require('../shared/siteContentDefaults.json');
+const connectToDatabase = require('./database');
+const { SiteContent, findOrCreateSiteContent } = require('./siteContentStore');
 
 const app = express();
 app.disable('x-powered-by');
@@ -25,12 +27,6 @@ const bookingSchema = new mongoose.Schema({
 });
 
 const Booking = mongoose.models.Booking || mongoose.model('Booking', bookingSchema);
-const siteContentSchema = new mongoose.Schema({
-  key: { type: String, required: true, unique: true, default: 'homepage' },
-  content: { type: mongoose.Schema.Types.Mixed, required: true },
-}, { timestamps: true });
-const SiteContent = mongoose.models.SiteContent || mongoose.model('SiteContent', siteContentSchema);
-let connectionPromise;
 
 const SITE_CONTENT_TEXT_LIMITS = {
   heroEyebrow: 100,
@@ -125,33 +121,6 @@ function normalizeSiteContent(input) {
   });
 
   return content;
-}
-
-async function findOrCreateSiteContent() {
-  return SiteContent.findOneAndUpdate(
-    { key: 'homepage' },
-    { $setOnInsert: { content: DEFAULT_SITE_CONTENT } },
-    { new: true, upsert: true, setDefaultsOnInsert: true },
-  ).lean();
-}
-
-async function connectToDatabase() {
-  if (mongoose.connection.readyState === 1) return;
-  if (!process.env.MONGO_URI) throw new Error('MONGO_URI is not configured');
-
-  if (!connectionPromise) {
-    connectionPromise = mongoose.connect(process.env.MONGO_URI, {
-      dbName: 'nutrition_db',
-      serverSelectionTimeoutMS: 8000,
-    });
-  }
-
-  try {
-    await connectionPromise;
-  } catch (error) {
-    connectionPromise = undefined;
-    throw error;
-  }
 }
 
 function getAdminConfig() {
