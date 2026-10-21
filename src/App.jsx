@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -18,29 +18,10 @@ import {
   X,
 } from 'lucide-react';
 import BookingModal from './components/BookingModal';
+import defaultSiteContent from '../shared/siteContentDefaults.json';
 
-const features = [
-  {
-    icon: ClipboardList,
-    title: 'Know your numbers',
-    description: 'Blood glucose and blood pressure screening, with a clear explanation of what your results mean.',
-  },
-  {
-    icon: Heart,
-    title: 'Understand your risk',
-    description: 'A thoughtful review of your diabetes and hypertension risk, health history, and everyday habits.',
-  },
-  {
-    icon: Salad,
-    title: 'See the whole picture',
-    description: 'Body composition insights that put your health goals into context, without quick fixes or judgement.',
-  },
-  {
-    icon: Leaf,
-    title: 'Make a plan that fits',
-    description: 'Practical nutrition advice for weight loss, weight gain, or finding a healthy balance that lasts.',
-  },
-];
+const FEATURE_ICONS = { clipboard: ClipboardList, heart: Heart, salad: Salad, leaf: Leaf, user: UserRound };
+const VALUE_ICONS = { clipboard: ClipboardList, heart: Heart, salad: Salad, leaf: Leaf, user: UserRound };
 
 function Brand({ light = false }) {
   return (
@@ -54,6 +35,24 @@ function Brand({ light = false }) {
 function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [siteContent, setSiteContent] = useState(defaultSiteContent);
+
+  useEffect(() => {
+    let isCurrent = true;
+    fetch('/api/site-content', { cache: 'no-store' })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return response.json();
+      })
+      .then((data) => {
+        if (isCurrent && data?.content) setSiteContent({ ...defaultSiteContent, ...data.content });
+      })
+      .catch(() => {});
+    return () => { isCurrent = false; };
+  }, []);
+
+  const phoneHref = siteContent.phone.replace(/[^\d+]/g, '');
+  const whatsappNumber = siteContent.whatsappNumber.replace(/\D/g, '');
 
   const openBooking = () => {
     setIsMenuOpen(false);
@@ -88,46 +87,44 @@ function App() {
         <section id="consultation" className="hero-section">
           <div className="hero-grid mx-auto max-w-7xl px-6 lg:px-10">
             <div className="hero-copy">
-              <div className="eyebrow"><span className="eyebrow-line" /> Personalised nutrition, made practical</div>
-              <h1 className="hero-heading">Feel better in your body. <em>For good.</em></h1>
-              <p className="hero-description">
-                Thoughtful, one-to-one nutrition guidance to help you understand your health and build habits that last.
-              </p>
+              <div className="eyebrow"><span className="eyebrow-line" /> {siteContent.heroEyebrow}</div>
+              <h1 className="hero-heading">{siteContent.heroTitle} <em>{siteContent.heroEmphasis}</em></h1>
+              <p className="hero-description">{siteContent.heroDescription}</p>
               <div className="hero-actions">
                 <button className="button" onClick={openBooking}>
                   Book your consultation <ArrowUpRight size={18} aria-hidden="true" />
                 </button>
                 <a className="text-link" href="#approach">Explore the experience <ArrowDownRight size={17} aria-hidden="true" /></a>
               </div>
-              <div className="hero-note"><span className="note-check"><Check size={13} /></span> Real people. Lasting change.</div>
+              <div className="hero-note"><span className="note-check"><Check size={13} /></span> {siteContent.heroNote}</div>
             </div>
 
             <div className="hero-visual" aria-label="A colourful, nourishing meal prepared with fresh ingredients">
               <div className="image-frame">
                 <img
-                  src="https://images.unsplash.com/photo-1490645935967-10de6ba17061?q=85&w=1400&auto=format&fit=crop"
-                  alt="A colourful table of fresh vegetables, grains, and nourishing food"
+                  src={siteContent.heroImageUrl}
+                  alt={siteContent.heroImageAlt}
                   fetchPriority="high"
                 />
                 <div className="image-shade" />
                 <div className="image-caption">
                   <Sparkles size={17} aria-hidden="true" />
-                  <span>Small choices. A healthier you.</span>
+                  <span>{siteContent.heroCaption}</span>
                 </div>
               </div>
               <div className="price-card">
-                <span className="price-label">Your first step</span>
-                <span className="price-amount">$40</span>
-                <span className="price-caption">per consultation</span>
+                <span className="price-label">{siteContent.priceLabel}</span>
+                <span className="price-amount">{siteContent.priceAmount}</span>
+                <span className="price-caption">{siteContent.priceCaption}</span>
                 <span className="price-divider" />
-                <span className="price-medical"><FileText size={15} aria-hidden="true" /> Medical aid accepted</span>
+                <span className="price-medical"><FileText size={15} aria-hidden="true" /> {siteContent.medicalNote}</span>
               </div>
               <div className="leaf-stamp" aria-hidden="true"><Leaf size={28} strokeWidth={1.3} /></div>
             </div>
           </div>
           <div className="hero-bottom mx-auto max-w-7xl px-6 lg:px-10">
             <div className="scroll-cue"><span /> A more balanced you starts here</div>
-            <span className="hero-coordinate">HARARE · ZIMBABWE</span>
+            <span className="hero-coordinate">{siteContent.location}</span>
           </div>
         </section>
 
@@ -135,25 +132,28 @@ function App() {
           <div className="mx-auto max-w-7xl px-6 py-20 lg:px-10 lg:py-28">
             <div className="section-heading-row">
               <div>
-                <div className="eyebrow"><span className="eyebrow-line" /> Your consultation</div>
-                <h2 className="section-heading">A clearer picture.<br /><em>A more confident you.</em></h2>
+                <div className="eyebrow"><span className="eyebrow-line" /> {siteContent.consultationEyebrow}</div>
+                <h2 className="section-heading">{siteContent.consultationTitle}<br /><em>{siteContent.consultationEmphasis}</em></h2>
               </div>
               <p className="section-intro">
-                Get to know your health with a supportive, evidence-based consultation designed around you—not a one-size-fits-all plan.
+                {siteContent.consultationDescription}
               </p>
             </div>
             <div className="feature-grid">
-              {features.map(({ icon: Icon, title, description }, index) => (
+              {siteContent.features.map(({ icon, title, description }, index) => {
+                const Icon = FEATURE_ICONS[icon] || Leaf;
+                return (
                 <article className="feature-card" key={title}>
                   <div className="feature-topline"><span>0{index + 1}</span><Icon size={21} strokeWidth={1.7} aria-hidden="true" /></div>
                   <h3>{title}</h3>
                   <p>{description}</p>
                 </article>
-              ))}
+                );
+              })}
             </div>
             <div className="approach-callout">
               <div className="callout-icon"><Leaf size={23} strokeWidth={1.6} aria-hidden="true" /></div>
-              <p><strong>No extremes. No guilt.</strong> Just a realistic next step, made together.</p>
+              <p><strong>{siteContent.calloutTitle}</strong> {siteContent.calloutDescription}</p>
               <button className="text-link" onClick={openBooking}>Let’s get started <ArrowUpRight size={16} aria-hidden="true" /></button>
             </div>
           </div>
@@ -161,9 +161,9 @@ function App() {
 
         <section className="values-section" aria-label="What you can expect">
           <div className="mx-auto grid max-w-7xl gap-10 px-6 py-14 md:grid-cols-3 lg:px-10">
-            <ValueItem icon={Leaf} title="Evidence-based" detail="Guidance grounded in good science." />
-            <ValueItem icon={UserRound} title="Personalised" detail="Care shaped around your life and goals." />
-            <ValueItem icon={Heart} title="Here for the long run" detail="Support for a healthier future." />
+            {siteContent.values.map(({ icon, title, detail }) => (
+              <ValueItem key={title} icon={VALUE_ICONS[icon] || Leaf} title={title} detail={detail} />
+            ))}
           </div>
         </section>
       </main>
@@ -172,24 +172,24 @@ function App() {
         <div className="mx-auto grid max-w-7xl gap-10 px-6 py-12 lg:grid-cols-[1.3fr_1fr_1fr] lg:items-center lg:px-10">
           <button className="footer-booking" onClick={openBooking}>
             <span className="footer-calendar"><CalendarDays size={24} strokeWidth={1.5} aria-hidden="true" /></span>
-            <span><small>Ready to take the next step?</small><strong>Book your consultation</strong></span>
+            <span><small>{siteContent.footerPrompt}</small><strong>{siteContent.bookingTitle}</strong></span>
             <ArrowUpRight className="footer-arrow" size={19} aria-hidden="true" />
           </button>
           <div className="footer-contact">
-            <a href="tel:+263784909690"><Phone size={16} aria-hidden="true" /> 078 490 9690</a>
-            <span><MapPin size={16} aria-hidden="true" /> 10 Silwood Close, Harare</span>
+            <a href={`tel:${phoneHref}`}><Phone size={16} aria-hidden="true" /> {siteContent.phone}</a>
+            <span><MapPin size={16} aria-hidden="true" /> {siteContent.address}</span>
           </div>
-          <div className="footer-brand"><Brand light /><p>NOURISH <i>·</i> BALANCE <i>·</i> THRIVE</p></div>
+          <div className="footer-brand"><Brand light /><p>{siteContent.footerTagline}</p></div>
         </div>
         <div className="footer-bottom mx-auto max-w-7xl px-6 lg:px-10">
           <span>© {new Date().getFullYear()} Nutrition with Linda</span>
-          <span>Real people. Lasting change.</span>
+          <span>{siteContent.footerBottomLine}</span>
         </div>
       </footer>
 
       <a
         className="whatsapp-float"
-        href="https://wa.me/263784909690?text=Hi%20Linda%2C%20I%27d%20like%20to%20ask%20about%20a%20nutrition%20consultation."
+        href={`https://wa.me/${whatsappNumber}?text=${encodeURIComponent(siteContent.whatsappMessage)}`}
         target="_blank"
         rel="noopener noreferrer"
         aria-label="Chat with Linda on WhatsApp"
@@ -199,7 +199,7 @@ function App() {
         <span>Chat on WhatsApp</span>
       </a>
 
-      {isModalOpen && <BookingModal onClose={() => setIsModalOpen(false)} />}
+      {isModalOpen && <BookingModal content={siteContent} onClose={() => setIsModalOpen(false)} />}
     </div>
   );
 }

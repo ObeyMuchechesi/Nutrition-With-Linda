@@ -2,6 +2,7 @@ const cors = require('cors');
 const express = require('express');
 const mongoose = require('mongoose');
 const crypto = require('node:crypto');
+const DEFAULT_SITE_CONTENT = require('../shared/siteContentDefaults.json');
 
 const app = express();
 app.disable('x-powered-by');
@@ -24,7 +25,115 @@ const bookingSchema = new mongoose.Schema({
 });
 
 const Booking = mongoose.models.Booking || mongoose.model('Booking', bookingSchema);
+const siteContentSchema = new mongoose.Schema({
+  key: { type: String, required: true, unique: true, default: 'homepage' },
+  content: { type: mongoose.Schema.Types.Mixed, required: true },
+}, { timestamps: true });
+const SiteContent = mongoose.models.SiteContent || mongoose.model('SiteContent', siteContentSchema);
 let connectionPromise;
+
+const SITE_CONTENT_TEXT_LIMITS = {
+  heroEyebrow: 100,
+  heroTitle: 100,
+  heroEmphasis: 60,
+  heroDescription: 400,
+  heroNote: 100,
+  heroImageAlt: 200,
+  heroCaption: 120,
+  priceLabel: 60,
+  priceAmount: 30,
+  priceCaption: 60,
+  medicalNote: 100,
+  location: 80,
+  consultationEyebrow: 80,
+  consultationTitle: 100,
+  consultationEmphasis: 100,
+  consultationDescription: 400,
+  calloutTitle: 100,
+  calloutDescription: 250,
+  footerPrompt: 120,
+  footerTagline: 120,
+  footerBottomLine: 120,
+  phone: 32,
+  address: 160,
+  bookingEyebrow: 80,
+  bookingTitle: 100,
+  bookingIntro: 300,
+  bookingSuccessEyebrow: 60,
+  bookingSuccessTitle: 120,
+  bookingSuccessCopy: 300,
+  bookingSubmitLabel: 60,
+  bookingFootnote: 160,
+  whatsappMessage: 300,
+};
+const SITE_CONTENT_ICONS = ['clipboard', 'heart', 'salad', 'leaf', 'user'];
+
+function cleanContentText(value, label, maximumLength) {
+  if (typeof value !== 'string') throw new Error(`${label} must be text.`);
+  const text = value.trim();
+  if (!text || text.length > maximumLength) throw new Error(`${label} must be between 1 and ${maximumLength} characters.`);
+  return text;
+}
+
+function normalizeSiteContent(input) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Add the website content before saving.');
+  const content = {};
+  for (const [key, maximumLength] of Object.entries(SITE_CONTENT_TEXT_LIMITS)) {
+    content[key] = cleanContentText(input[key], key, maximumLength);
+  }
+
+  const imageUrl = cleanContentText(input.heroImageUrl, 'Hero image URL', 2048);
+  let parsedImageUrl;
+  try {
+    parsedImageUrl = new URL(imageUrl);
+  } catch {
+    throw new Error('Hero image URL must be a valid HTTPS or HTTP link.');
+  }
+  if (!['https:', 'http:'].includes(parsedImageUrl.protocol)) {
+    throw new Error('Hero image URL must be a valid HTTPS or HTTP link.');
+  }
+  content.heroImageUrl = imageUrl;
+
+  const whatsappNumber = typeof input.whatsappNumber === 'string' ? input.whatsappNumber.replace(/\D/g, '') : '';
+  if (!/^\d{8,15}$/.test(whatsappNumber)) throw new Error('WhatsApp number must include 8 to 15 digits with the country code.');
+  content.whatsappNumber = whatsappNumber;
+
+  if (!Array.isArray(input.features) || input.features.length < 1 || input.features.length > 6) {
+    throw new Error('Add between 1 and 6 service cards.');
+  }
+  content.features = input.features.map((feature, index) => {
+    if (!feature || typeof feature !== 'object') throw new Error(`Service ${index + 1} is incomplete.`);
+    const icon = SITE_CONTENT_ICONS.includes(feature.icon) ? feature.icon : 'leaf';
+    return {
+      icon,
+      title: cleanContentText(feature.title, `Service ${index + 1} title`, 80),
+      description: cleanContentText(feature.description, `Service ${index + 1} description`, 300),
+    };
+  });
+
+  if (!Array.isArray(input.values) || input.values.length < 1 || input.values.length > 4) {
+    throw new Error('Add between 1 and 4 practice values.');
+  }
+  content.values = input.values.map((value, index) => {
+    if (!value || typeof value !== 'object') throw new Error(`Practice value ${index + 1} is incomplete.`);
+    const icon = SITE_CONTENT_ICONS.includes(value.icon) ? value.icon : 'leaf';
+    return {
+      icon,
+      title: cleanContentText(value.title, `Practice value ${index + 1} title`, 80),
+      detail: cleanContentText(value.detail, `Practice value ${index + 1} detail`, 180),
+    };
+  });
+
+  return content;
+}
+
+async function findOrCreateSiteContent() {
+  return SiteContent.findOneAndUpdate(
+    { key: 'homepage' },
+    { $setOnInsert: { content: DEFAULT_SITE_CONTENT } },
+    { new: true, upsert: true, setDefaultsOnInsert: true },
+  ).lean();
+}
 
 async function connectToDatabase() {
   if (mongoose.connection.readyState === 1) return;
@@ -172,6 +281,18 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
 
+app.get('/api/site-content', async (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  try {
+    await connectToDatabase();
+    const record = await findOrCreateSiteContent();
+    return res.json({ content: record.content || DEFAULT_SITE_CONTENT });
+  } catch (error) {
+    console.error('Unable to load website content:', error.message);
+    return res.status(503).json({ message: 'Website content is temporarily unavailable.' });
+  }
+});
+
 app.get('/api/admin/status', (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   const config = getAdminConfig();
@@ -179,6 +300,41 @@ app.get('/api/admin/status', (req, res) => {
     configured: Boolean(config),
     authenticated: Boolean(config && verifyAdminSession(getAdminSession(req), config)),
   });
+});
+
+app.get('/api/admin/site-content', adminAuth, async (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  try {
+    await connectToDatabase();
+    const record = await findOrCreateSiteContent();
+    return res.json({ content: record.content || DEFAULT_SITE_CONTENT, updatedAt: record.updatedAt });
+  } catch (error) {
+    console.error('Unable to load editable website content:', error.message);
+    return res.status(503).json({ message: 'Website content could not be loaded right now.' });
+  }
+});
+
+app.put('/api/admin/site-content', adminAuth, async (req, res) => {
+  let content;
+  try {
+    content = normalizeSiteContent(req.body);
+  } catch (error) {
+    return res.status(400).json({ message: error.message || 'Please check the website content and try again.' });
+  }
+
+  try {
+    await connectToDatabase();
+    const record = await SiteContent.findOneAndUpdate(
+      { key: 'homepage' },
+      { $set: { content } },
+      { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true },
+    ).lean();
+    res.setHeader('Cache-Control', 'no-store');
+    return res.json({ content: record.content, updatedAt: record.updatedAt });
+  } catch (error) {
+    console.error('Unable to save editable website content:', error.message);
+    return res.status(503).json({ message: 'Website content could not be saved right now.' });
+  }
 });
 
 app.post('/api/admin/login', rateLimitAdminLogin, (req, res) => {

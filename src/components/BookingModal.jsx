@@ -9,7 +9,7 @@ function getToday() {
   return localDate.toISOString().slice(0, 10);
 }
 
-export default function BookingModal({ onClose }) {
+export default function BookingModal({ content, onClose }) {
   const [formData, setFormData] = useState(initialForm);
   const [status, setStatus] = useState('idle');
 
@@ -53,27 +53,27 @@ export default function BookingModal({ onClose }) {
         {status === 'success' ? (
           <div className="booking-success" role="status">
             <span className="success-icon"><Check size={26} /></span>
-            <p className="eyebrow">Thank you</p>
-            <h2 id="booking-title">Your next step is underway.</h2>
-            <p>Your consultation request has been sent. Linda will be in touch shortly to confirm your appointment.</p>
+            <p className="eyebrow">{content.bookingSuccessEyebrow}</p>
+            <h2 id="booking-title">{content.bookingSuccessTitle}</h2>
+            <p>{content.bookingSuccessCopy}</p>
             <button className="button" onClick={onClose}>Done <ArrowUpRight size={17} /></button>
           </div>
         ) : (
           <>
-            <p className="eyebrow"><span className="eyebrow-line" /> Let’s get started</p>
-            <h2 id="booking-title">Book your consultation</h2>
-            <p className="modal-intro">Share a few details and we’ll be in touch to arrange a time that works for you.</p>
+            <p className="eyebrow"><span className="eyebrow-line" /> {content.bookingEyebrow}</p>
+            <h2 id="booking-title">{content.bookingTitle}</h2>
+            <p className="modal-intro">{content.bookingIntro}</p>
             <form className="booking-form" onSubmit={handleSubmit}>
               <label>Full name<input autoFocus required name="name" autoComplete="name" maxLength="100" value={formData.name} onChange={updateField} /></label>
               <label>Email address<input required name="email" type="email" autoComplete="email" maxLength="254" value={formData.email} onChange={updateField} /></label>
               <label>Phone number<input required name="phone" type="tel" autoComplete="tel" maxLength="32" value={formData.phone} onChange={updateField} /></label>
               <label>Preferred date<input required name="date" type="date" min={getToday()} value={formData.date} onChange={updateField} /></label>
               <button className="button form-submit" type="submit" disabled={status === 'loading'}>
-                {status === 'loading' ? 'Sending request…' : 'Send booking request'} <ArrowUpRight size={17} aria-hidden="true" />
+                {status === 'loading' ? 'Sending request…' : content.bookingSubmitLabel} <ArrowUpRight size={17} aria-hidden="true" />
               </button>
-              {status === 'error' && <p className="form-error" role="alert">We couldn’t send your request just now. Please try again, or call 078 490 9690.</p>}
+              {status === 'error' && <p className="form-error" role="alert">We couldn’t send your request just now. Please try again, or call {content.phone}.</p>}
             </form>
-            <p className="form-footnote">Consultations are $40. Medical aid accepted.</p>
+            <p className="form-footnote">{content.bookingFootnote}</p>
           </>
         )}
       </section>

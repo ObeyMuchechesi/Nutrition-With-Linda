@@ -1,0 +1,63 @@
+{
+  "heroEyebrow": "Personalised nutrition, made practical",
+  "heroTitle": "Feel better in your body.",
+  "heroEmphasis": "For good.",
+  "heroDescription": "Thoughtful, one-to-one nutrition guidance to help you understand your health and build habits that last.",
+  "heroNote": "Real people. Lasting change.",
+  "heroImageUrl": "https://images.unsplash.com/photo-1490645935967-10de6ba17061?q=85&w=1400&auto=format&fit=crop",
+  "heroImageAlt": "A colourful table of fresh vegetables, grains, and nourishing food",
+  "heroCaption": "Small choices. A healthier you.",
+  "priceLabel": "Your first step",
+  "priceAmount": "$40",
+  "priceCaption": "per consultation",
+  "medicalNote": "Medical aid accepted",
+  "location": "HARARE · ZIMBABWE",
+  "consultationEyebrow": "Your consultation",
+  "consultationTitle": "A clearer picture.",
+  "consultationEmphasis": "A more confident you.",
+  "consultationDescription": "Get to know your health with a supportive, evidence-based consultation designed around you—not a one-size-fits-all plan.",
+  "features": [
+    {
+      "icon": "clipboard",
+      "title": "Know your numbers",
+      "description": "Blood glucose and blood pressure screening, with a clear explanation of what your results mean."
+    },
+    {
+      "icon": "heart",
+      "title": "Understand your risk",
+      "description": "A thoughtful review of your diabetes and hypertension risk, health history, and everyday habits."
+    },
+    {
+      "icon": "salad",
+      "title": "See the whole picture",
+      "description": "Body composition insights that put your health goals into context, without quick fixes or judgement."
+    },
+    {
+      "icon": "leaf",
+      "title": "Make a plan that fits",
+      "description": "Practical nutrition advice for weight loss, weight gain, or finding a healthy balance that lasts."
+    }
+  ],
+  "calloutTitle": "No extremes. No guilt.",
+  "calloutDescription": "Just a realistic next step, made together.",
+  "values": [
+    { "icon": "leaf", "title": "Evidence-based", "detail": "Guidance grounded in good science." },
+    { "icon": "user", "title": "Personalised", "detail": "Care shaped around your life and goals." },
+    { "icon": "heart", "title": "Here for the long run", "detail": "Support for a healthier future." }
+  ],
+  "footerPrompt": "Ready to take the next step?",
+  "footerTagline": "NOURISH · BALANCE · THRIVE",
+  "footerBottomLine": "Real people. Lasting change.",
+  "phone": "078 490 9690",
+  "address": "10 Silwood Close, Harare",
+  "bookingEyebrow": "Let’s get started",
+  "bookingTitle": "Book your consultation",
+  "bookingIntro": "Share a few details and we’ll be in touch to arrange a time that works for you.",
+  "bookingSuccessEyebrow": "Thank you",
+  "bookingSuccessTitle": "Your next step is underway.",
+  "bookingSuccessCopy": "Your consultation request has been sent. Linda will be in touch shortly to confirm your appointment.",
+  "bookingSubmitLabel": "Send booking request",
+  "bookingFootnote": "Consultations are $40. Medical aid accepted.",
+  "whatsappNumber": "263784909690",
+  "whatsappMessage": "Hi Linda, I’d like to ask about a nutrition consultation."
+}

@@ -11,9 +11,12 @@ import {
   Leaf,
   LockKeyhole,
   LogOut,
+  Plus,
   RefreshCw,
+  Save,
   Search,
   ShieldCheck,
+  Trash2,
   UsersRound,
 } from 'lucide-react';
 import './admin.css';
@@ -50,6 +53,12 @@ export default function AdminApp() {
   const [pageError, setPageError] = useState('');
   const [loading, setLoading] = useState(true);
   const [savingBookingId, setSavingBookingId] = useState('');
+  const [activeView, setActiveView] = useState('dashboard');
+  const [contentDraft, setContentDraft] = useState(null);
+  const [contentLoading, setContentLoading] = useState(false);
+  const [contentSaving, setContentSaving] = useState(false);
+  const [contentMessage, setContentMessage] = useState('');
+  const [contentError, setContentError] = useState('');
 
   async function loadDashboard({ nextPage = page, nextStatus = statusFilter, nextSearch = activeSearch } = {}) {
     setLoading(true);
@@ -86,6 +95,86 @@ export default function AdminApp() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function loadSiteContent() {
+    setContentLoading(true);
+    setContentError('');
+    setContentMessage('');
+    try {
+      const response = await fetch('/api/admin/site-content', { cache: 'no-store' });
+      const data = await readJson(response);
+      if (response.status === 401) {
+        setAuthState('login');
+        return false;
+      }
+      if (!response.ok) throw new Error(data.message || 'Website content could not be loaded.');
+      setContentDraft(data.content);
+      return true;
+    } catch (error) {
+      setContentError(error.message || 'Website content could not be loaded.');
+      return false;
+    } finally {
+      setContentLoading(false);
+    }
+  }
+
+  async function saveSiteContent(event) {
+    event.preventDefault();
+    setContentSaving(true);
+    setContentError('');
+    setContentMessage('');
+    try {
+      const response = await fetch('/api/admin/site-content', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(contentDraft),
+      });
+      const data = await readJson(response);
+      if (response.status === 401) {
+        setAuthState('login');
+        return;
+      }
+      if (!response.ok) throw new Error(data.message || 'Website content could not be saved.');
+      setContentDraft(data.content);
+      setContentMessage('Saved. The website will show these changes when it is next opened.');
+    } catch (error) {
+      setContentError(error.message || 'Website content could not be saved.');
+    } finally {
+      setContentSaving(false);
+    }
+  }
+
+  function updateContentField(field, value) {
+    setContentDraft((previous) => ({ ...previous, [field]: value }));
+  }
+
+  function updateContentItem(collection, index, field, value) {
+    setContentDraft((previous) => ({
+      ...previous,
+      [collection]: previous[collection].map((item, itemIndex) => itemIndex === index ? { ...item, [field]: value } : item),
+    }));
+  }
+
+  function addContentItem(collection) {
+    setContentDraft((previous) => ({
+      ...previous,
+      [collection]: [...previous[collection], collection === 'features'
+        ? { icon: 'leaf', title: '', description: '' }
+        : { icon: 'leaf', title: '', detail: '' }],
+    }));
+  }
+
+  function removeContentItem(collection, index) {
+    setContentDraft((previous) => ({
+      ...previous,
+      [collection]: previous[collection].filter((_, itemIndex) => itemIndex !== index),
+    }));
+  }
+
+  function selectView(nextView) {
+    setActiveView(nextView);
+    if (nextView === 'content') loadSiteContent();
   }
 
   useEffect(() => {
@@ -242,21 +331,136 @@ export default function AdminApp() {
     );
   }
 
+  if (activeView === 'content') {
+    return (
+      <AdminShell>
+        <AdminHeader activeView={activeView} onViewChange={selectView} onLogout={handleLogout} />
+        <main className="admin-main">
+          <div className="admin-page-heading">
+            <div>
+              <p className="admin-eyebrow">Public website</p>
+              <h1>Website content</h1>
+              <p className="admin-page-intro">Update the words, service cards, prices, and contact details visitors see.</p>
+            </div>
+            <button className="admin-refresh-button" disabled={contentLoading} onClick={loadSiteContent} type="button">
+              <RefreshCw size={15} className={contentLoading ? 'admin-rotating' : ''} /> Reload content
+            </button>
+          </div>
+
+          {contentError && <div className="admin-alert" role="alert">{contentError}</div>}
+          {contentMessage && <div className="admin-success-alert" role="status">{contentMessage}</div>}
+
+          {contentLoading && !contentDraft ? (
+            <div className="admin-content-loading"><span className="admin-spinner" /> Loading website content…</div>
+          ) : contentDraft ? (
+            <form className="admin-content-form" onSubmit={saveSiteContent}>
+              <div className="admin-content-actions">
+                <p>Changes are stored in MongoDB and appear to visitors after they refresh the website.</p>
+                <button className="admin-primary-button" disabled={contentSaving} type="submit">
+                  <Save size={16} /> {contentSaving ? 'Saving…' : 'Save website changes'}
+                </button>
+              </div>
+
+              <ContentSection title="First impression" description="The hero section at the top of your homepage.">
+                <ContentField label="Eyebrow" value={contentDraft.heroEyebrow} onChange={(value) => updateContentField('heroEyebrow', value)} />
+                <ContentField label="Main heading" value={contentDraft.heroTitle} onChange={(value) => updateContentField('heroTitle', value)} />
+                <ContentField label="Heading emphasis" value={contentDraft.heroEmphasis} onChange={(value) => updateContentField('heroEmphasis', value)} />
+                <ContentField label="Intro text" multiline value={contentDraft.heroDescription} onChange={(value) => updateContentField('heroDescription', value)} />
+                <ContentField label="Short note" value={contentDraft.heroNote} onChange={(value) => updateContentField('heroNote', value)} />
+                <ContentField label="Hero image URL" type="url" maxLength={2048} value={contentDraft.heroImageUrl} onChange={(value) => updateContentField('heroImageUrl', value)} />
+                <ContentField label="Image description" value={contentDraft.heroImageAlt} onChange={(value) => updateContentField('heroImageAlt', value)} />
+                <ContentField label="Image caption" value={contentDraft.heroCaption} onChange={(value) => updateContentField('heroCaption', value)} />
+                <ContentField label="Location label" value={contentDraft.location} onChange={(value) => updateContentField('location', value)} />
+              </ContentSection>
+
+              <ContentSection title="Consultation and price" description="The introduction, price card, and promise below the hero.">
+                <ContentField label="Section eyebrow" value={contentDraft.consultationEyebrow} onChange={(value) => updateContentField('consultationEyebrow', value)} />
+                <ContentField label="Section heading" value={contentDraft.consultationTitle} onChange={(value) => updateContentField('consultationTitle', value)} />
+                <ContentField label="Heading emphasis" value={contentDraft.consultationEmphasis} onChange={(value) => updateContentField('consultationEmphasis', value)} />
+                <ContentField label="Section description" multiline value={contentDraft.consultationDescription} onChange={(value) => updateContentField('consultationDescription', value)} />
+                <ContentField label="Price label" value={contentDraft.priceLabel} onChange={(value) => updateContentField('priceLabel', value)} />
+                <ContentField label="Price" value={contentDraft.priceAmount} onChange={(value) => updateContentField('priceAmount', value)} />
+                <ContentField label="Price caption" value={contentDraft.priceCaption} onChange={(value) => updateContentField('priceCaption', value)} />
+                <ContentField label="Medical aid note" value={contentDraft.medicalNote} onChange={(value) => updateContentField('medicalNote', value)} />
+                <ContentField label="Callout heading" value={contentDraft.calloutTitle} onChange={(value) => updateContentField('calloutTitle', value)} />
+                <ContentField label="Callout text" value={contentDraft.calloutDescription} onChange={(value) => updateContentField('calloutDescription', value)} />
+              </ContentSection>
+
+              <ContentSection title="Services" description="Edit, add, remove, or reorder the consultation cards.">
+                {contentDraft.features.map((feature, index) => (
+                  <ContentItemEditor
+                    key={`feature-${index}`}
+                    title={`Service ${index + 1}`}
+                    item={feature}
+                    textKey="description"
+                    textLabel="Description"
+                    onChange={(field, value) => updateContentItem('features', index, field, value)}
+                    onRemove={() => removeContentItem('features', index)}
+                    canRemove={contentDraft.features.length > 1}
+                  />
+                ))}
+                {contentDraft.features.length < 6 && <button className="admin-add-content-button" type="button" onClick={() => addContentItem('features')}><Plus size={15} /> Add a service</button>}
+              </ContentSection>
+
+              <ContentSection title="What clients can expect" description="The short practice values near the bottom of the homepage.">
+                {contentDraft.values.map((value, index) => (
+                  <ContentItemEditor
+                    key={`value-${index}`}
+                    title={`Practice value ${index + 1}`}
+                    item={value}
+                    textKey="detail"
+                    textLabel="Detail"
+                    onChange={(field, text) => updateContentItem('values', index, field, text)}
+                    onRemove={() => removeContentItem('values', index)}
+                    canRemove={contentDraft.values.length > 1}
+                  />
+                ))}
+                {contentDraft.values.length < 4 && <button className="admin-add-content-button" type="button" onClick={() => addContentItem('values')}><Plus size={15} /> Add a practice value</button>}
+              </ContentSection>
+
+              <ContentSection title="Contact and WhatsApp" description="These details appear in the footer and floating WhatsApp link.">
+                <ContentField label="Phone number" value={contentDraft.phone} onChange={(value) => updateContentField('phone', value)} />
+                <ContentField label="Address" value={contentDraft.address} onChange={(value) => updateContentField('address', value)} />
+                <ContentField label="WhatsApp number with country code" help="Use digits only, for example 263784909690." value={contentDraft.whatsappNumber} onChange={(value) => updateContentField('whatsappNumber', value)} />
+                <ContentField label="WhatsApp pre-filled message" multiline value={contentDraft.whatsappMessage} onChange={(value) => updateContentField('whatsappMessage', value)} />
+                <ContentField label="Footer prompt" value={contentDraft.footerPrompt} onChange={(value) => updateContentField('footerPrompt', value)} />
+                <ContentField label="Footer tagline" value={contentDraft.footerTagline} onChange={(value) => updateContentField('footerTagline', value)} />
+                <ContentField label="Footer closing line" value={contentDraft.footerBottomLine} onChange={(value) => updateContentField('footerBottomLine', value)} />
+              </ContentSection>
+
+              <ContentSection title="Booking form" description="The appointment request dialog and confirmation message.">
+                <ContentField label="Form eyebrow" value={contentDraft.bookingEyebrow} onChange={(value) => updateContentField('bookingEyebrow', value)} />
+                <ContentField label="Form heading" value={contentDraft.bookingTitle} onChange={(value) => updateContentField('bookingTitle', value)} />
+                <ContentField label="Intro text" multiline value={contentDraft.bookingIntro} onChange={(value) => updateContentField('bookingIntro', value)} />
+                <ContentField label="Success eyebrow" value={contentDraft.bookingSuccessEyebrow} onChange={(value) => updateContentField('bookingSuccessEyebrow', value)} />
+                <ContentField label="Success heading" value={contentDraft.bookingSuccessTitle} onChange={(value) => updateContentField('bookingSuccessTitle', value)} />
+                <ContentField label="Success message" multiline value={contentDraft.bookingSuccessCopy} onChange={(value) => updateContentField('bookingSuccessCopy', value)} />
+                <ContentField label="Submit button" value={contentDraft.bookingSubmitLabel} onChange={(value) => updateContentField('bookingSubmitLabel', value)} />
+                <ContentField label="Form footnote" value={contentDraft.bookingFootnote} onChange={(value) => updateContentField('bookingFootnote', value)} />
+              </ContentSection>
+
+              <div className="admin-content-actions admin-content-actions-bottom">
+                <span>Remember to save before leaving this page.</span>
+                <button className="admin-primary-button" disabled={contentSaving} type="submit">
+                  <Save size={16} /> {contentSaving ? 'Saving…' : 'Save website changes'}
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div className="admin-content-empty"><p>Website content is not available right now.</p><button className="admin-primary-button" onClick={loadSiteContent}>Try again</button></div>
+          )}
+          <footer className="admin-footer"><span>Nutrition with Linda</span><span>Website content is stored securely in MongoDB.</span></footer>
+        </main>
+      </AdminShell>
+    );
+  }
+
   const trend = overview?.monthlyTrend || [];
   const maxTrend = Math.max(1, ...trend.map((entry) => entry.count));
 
   return (
     <AdminShell>
-      <header className="admin-header">
-        <a className="admin-brand" href="/" aria-label="Nutrition with Linda home">
-          <span className="admin-brand-icon"><Leaf size={18} /></span>
-          <span><strong>Nutrition</strong><small>with Linda</small></span>
-        </a>
-        <div className="admin-header-actions">
-          <span className="admin-secure-label"><ShieldCheck size={15} /> Private admin area</span>
-          <button className="admin-logout-button" onClick={handleLogout}><LogOut size={16} /> <span>Sign out</span></button>
-        </div>
-      </header>
+      <AdminHeader activeView={activeView} onViewChange={selectView} onLogout={handleLogout} />
 
       <main className="admin-main">
         <div className="admin-page-heading">
@@ -367,6 +571,74 @@ function KpiCard({ icon: Icon, label, value, detail }) {
       <strong>{value}</strong>
       <small>{detail}</small>
     </article>
+  );
+}
+
+function AdminHeader({ activeView, onViewChange, onLogout }) {
+  return (
+    <header className="admin-header">
+      <a className="admin-brand" href="/" aria-label="Nutrition with Linda home">
+        <span className="admin-brand-icon"><Leaf size={18} /></span>
+        <span><strong>Nutrition</strong><small>with Linda</small></span>
+      </a>
+      <nav className="admin-view-tabs" aria-label="Dashboard sections">
+        <button className={activeView === 'dashboard' ? 'admin-view-tab active' : 'admin-view-tab'} onClick={() => onViewChange('dashboard')} type="button">Bookings</button>
+        <button className={activeView === 'content' ? 'admin-view-tab active' : 'admin-view-tab'} onClick={() => onViewChange('content')} type="button">Website content</button>
+      </nav>
+      <div className="admin-header-actions">
+        <span className="admin-secure-label"><ShieldCheck size={15} /> Private admin area</span>
+        <button className="admin-logout-button" onClick={onLogout}><LogOut size={16} /> <span>Sign out</span></button>
+      </div>
+    </header>
+  );
+}
+
+function ContentSection({ title, description, children }) {
+  return (
+    <section className="admin-content-section">
+      <div className="admin-content-section-heading"><h2>{title}</h2><p>{description}</p></div>
+      <div className="admin-content-fields">{children}</div>
+    </section>
+  );
+}
+
+function ContentField({ label, value, onChange, multiline = false, type = 'text', help = '', maxLength = 400 }) {
+  return (
+    <label className={`admin-content-field ${multiline ? 'admin-content-field-wide' : ''}`}>
+      <span>{label}</span>
+      {multiline
+        ? <textarea rows="3" maxLength={maxLength} value={value || ''} onChange={(event) => onChange(event.target.value)} />
+        : <input type={type} maxLength={maxLength} value={value || ''} onChange={(event) => onChange(event.target.value)} />}
+      {help && <small>{help}</small>}
+    </label>
+  );
+}
+
+function ContentItemEditor({ title, item, textKey, textLabel, onChange, onRemove, canRemove }) {
+  const icons = [
+    ['clipboard', 'Clipboard'],
+    ['heart', 'Heart'],
+    ['salad', 'Salad'],
+    ['leaf', 'Leaf'],
+    ['user', 'Person'],
+  ];
+  return (
+    <div className="admin-content-item">
+      <div className="admin-content-item-heading">
+        <h3>{title}</h3>
+        <button className="admin-remove-content-button" disabled={!canRemove} onClick={onRemove} type="button"><Trash2 size={14} /> Remove</button>
+      </div>
+      <div className="admin-content-fields">
+        <label className="admin-content-field">
+          <span>Icon</span>
+          <select value={item.icon || 'leaf'} onChange={(event) => onChange('icon', event.target.value)}>
+            {icons.map(([value, label]) => <option value={value} key={value}>{label}</option>)}
+          </select>
+        </label>
+        <ContentField label="Title" value={item.title} onChange={(value) => onChange('title', value)} />
+        <ContentField label={textLabel} multiline value={item[textKey]} onChange={(value) => onChange(textKey, value)} />
+      </div>
+    </div>
   );
 }
 
