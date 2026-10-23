@@ -448,6 +448,21 @@ app.get('/api/admin/patients', adminAuth, async (req, res) => {
   }
 });
 
+app.delete('/api/admin/patients', adminAuth, async (req, res) => {
+  const patientId = typeof req.query.patientId === 'string' ? req.query.patientId : '';
+  if (!mongoose.isValidObjectId(patientId)) return res.status(400).json({ message: 'Choose a valid patient.' });
+
+  try {
+    await connectToDatabase();
+    const patient = await Patient.findByIdAndDelete(patientId).select('_id').lean();
+    if (!patient) return res.status(404).json({ message: 'Patient not found.' });
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('Unable to delete patient record:', error.message);
+    return res.status(503).json({ message: 'The patient record could not be deleted right now.' });
+  }
+});
+
 app.post('/api/admin/patients', adminAuth, async (req, res) => {
   let patientDetails;
   try {

@@ -94,6 +94,7 @@ export default function AdminApp() {
   const [showPatientForm, setShowPatientForm] = useState(false);
   const [patientForm, setPatientForm] = useState({ name: '', email: '', phone: '' });
   const [patientSaving, setPatientSaving] = useState(false);
+  const [patientDeleting, setPatientDeleting] = useState(false);
   const [showMeasurementForm, setShowMeasurementForm] = useState(false);
   const [measurementForm, setMeasurementForm] = useState(emptyMeasurementForm);
   const [measurementSaving, setMeasurementSaving] = useState(false);
@@ -249,6 +250,37 @@ export default function AdminApp() {
       setPatientError(error.message || 'The patient could not be added.');
     } finally {
       setPatientSaving(false);
+    }
+  }
+
+  async function deletePatient() {
+    if (!selectedPatient || !selectedPatientId) return;
+    const measurementCount = selectedPatient.measurementCount ?? selectedPatient.measurements?.length ?? 0;
+    const visitLabel = measurementCount === 1 ? 'measurement' : 'measurements';
+    if (!window.confirm(`Permanently delete ${selectedPatient.name} and all ${measurementCount} saved ${visitLabel}? This cannot be undone.`)) return;
+
+    const patientName = selectedPatient.name;
+    setPatientDeleting(true);
+    setPatientError('');
+    setPatientMessage('');
+    try {
+      const params = new URLSearchParams({ patientId: selectedPatientId });
+      const response = await fetch(`/api/admin/patients?${params.toString()}`, { method: 'DELETE' });
+      const data = await readJson(response);
+      if (response.status === 401) {
+        setAuthState('login');
+        return;
+      }
+      if (!response.ok) throw new Error(data.message || 'The patient could not be deleted.');
+
+      setShowMeasurementForm(false);
+      setPatientMessage(`${patientName} and their measurement history were deleted.`);
+      const nextPage = patients.length === 1 && patientPage > 1 ? patientPage - 1 : patientPage;
+      await loadPatients({ nextPage, nextSearch: activePatientSearch, nextSelectedId: '' });
+    } catch (error) {
+      setPatientError(error.message || 'The patient could not be deleted.');
+    } finally {
+      setPatientDeleting(false);
     }
   }
 
@@ -725,7 +757,10 @@ export default function AdminApp() {
                   <div className="admin-patient-profile">
                     <span className="admin-patient-avatar admin-patient-avatar-large" aria-hidden="true">{selectedPatient.name.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()}</span>
                     <div className="admin-patient-profile-copy"><p className="admin-eyebrow">Patient file</p><h2>{selectedPatient.name}</h2><div className="admin-patient-contact">{selectedPatient.email && <a href={`mailto:${selectedPatient.email}`}>{selectedPatient.email}</a>}{selectedPatient.phone && <a href={`tel:${selectedPatient.phone}`}>{selectedPatient.phone}</a>}</div></div>
-                    <button className="admin-primary-button admin-patient-record-button" onClick={() => { setMeasurementForm(emptyMeasurementForm()); setShowMeasurementForm((visible) => !visible); setPatientError(''); setPatientMessage(''); }} type="button"><Plus size={16} /> {showMeasurementForm ? 'Close entry' : 'Record visit'}</button>
+                    <div className="admin-patient-profile-actions">
+                      <button className="admin-primary-button admin-patient-record-button" disabled={patientDeleting} onClick={() => { setMeasurementForm(emptyMeasurementForm()); setShowMeasurementForm((visible) => !visible); setPatientError(''); setPatientMessage(''); }} type="button"><Plus size={16} /> {showMeasurementForm ? 'Close entry' : 'Record visit'}</button>
+                      <button className="admin-patient-delete-button" disabled={patientDeleting} onClick={deletePatient} type="button"><Trash2 size={14} /> {patientDeleting ? 'Deleting…' : 'Delete patient'}</button>
+                    </div>
                   </div>
 
                   {showMeasurementForm && (

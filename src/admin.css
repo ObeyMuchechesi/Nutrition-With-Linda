@@ -258,7 +258,11 @@
 .admin-patient-profile-copy h2 { overflow: hidden; margin: 0; color: #2b4033; font-family: var(--serif); font-size: 24px; font-weight: 500; letter-spacing: -.02em; text-overflow: ellipsis; white-space: nowrap; }
 .admin-patient-contact { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 5px; color: #8b9287; font-size: 9px; }
 .admin-patient-contact a:hover { color: #536d43; text-decoration: underline; }
+.admin-patient-profile-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; }
 .admin-patient-record-button { min-height: 38px; flex: 0 0 auto; padding: 0 11px; font-size: 10px; }
+.admin-patient-delete-button { display: inline-flex; min-height: 38px; align-items: center; justify-content: center; gap: 6px; border: 1px solid #eadbd7; border-radius: 1px; background: #fff; padding: 0 11px; color: #96584f; font-size: 10px; font-weight: 600; }
+.admin-patient-delete-button:hover:not(:disabled) { border-color: #d7b9b1; background: #fbf5f3; color: #85493f; }
+.admin-patient-delete-button:disabled { cursor: wait; opacity: .65; }
 .admin-patient-section-heading, .admin-patient-history-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid #edf0e9; padding: 15px 0 12px; }
 .admin-patient-section-heading .admin-eyebrow, .admin-patient-history-heading .admin-eyebrow { margin-bottom: 4px; }
 .admin-patient-section-heading h3, .admin-patient-history-heading h3 { margin: 0; color: #324735; font-family: var(--serif); font-size: 16px; font-weight: 500; }
@@ -340,7 +344,8 @@
   .admin-patient-profile { flex-wrap: wrap; }
   .admin-patient-profile-copy { min-width: calc(100% - 78px); }
   .admin-patient-profile-copy h2 { font-size: 22px; }
-  .admin-patient-record-button { width: 100%; }
+  .admin-patient-profile-actions { width: 100%; }
+  .admin-patient-profile-actions button { flex: 1; }
   .admin-patient-metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-patient-metric-card { min-height: 112px; }
   .admin-patient-metric-card > strong { font-size: 22px; }
