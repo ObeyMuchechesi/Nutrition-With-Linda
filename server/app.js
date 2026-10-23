@@ -28,6 +28,29 @@ const bookingSchema = new mongoose.Schema({
 
 const Booking = mongoose.models.Booking || mongoose.model('Booking', bookingSchema);
 
+const patientMeasurementSchema = new mongoose.Schema({
+  date: { type: Date, required: true },
+  weightKg: { type: Number, required: true, min: 1, max: 500 },
+  bmi: { type: Number, required: true, min: 5, max: 100 },
+  bodyFatPercentage: { type: Number, required: true, min: 0, max: 80 },
+  visceralFat: { type: Number, required: true, min: 0, max: 100 },
+  waistCircumferenceCm: { type: Number, required: true, min: 20, max: 250 },
+  notes: { type: String, trim: true, maxlength: 500, default: '' },
+  createdAt: { type: Date, default: Date.now },
+});
+
+const patientSchema = new mongoose.Schema({
+  name: { type: String, required: true, trim: true, maxlength: 100 },
+  email: { type: String, trim: true, lowercase: true, maxlength: 254 },
+  emailNormalized: { type: String, select: false },
+  phone: { type: String, trim: true, maxlength: 32 },
+  phoneNormalized: { type: String, select: false },
+  measurements: { type: [patientMeasurementSchema], default: [] },
+}, { timestamps: true });
+
+patientSchema.index({ updatedAt: -1 });
+const Patient = mongoose.models.Patient || mongoose.model('Patient', patientSchema);
+
 const SITE_CONTENT_TEXT_LIMITS = {
   heroEyebrow: 100,
   heroTitle: 100,
@@ -246,6 +269,59 @@ function bookingStatusFilter(status) {
   return { status };
 }
 
+function serializePatient(patient) {
+  const measurements = [...(patient.measurements || [])].sort((left, right) => (
+    new Date(right.date).getTime() - new Date(left.date).getTime()
+      || new Date(right.createdAt || 0).getTime() - new Date(left.createdAt || 0).getTime()
+  ));
+  const { emailNormalized, phoneNormalized, ...publicPatient } = patient;
+  return { ...publicPatient, measurements, measurementCount: measurements.length, latestMeasurement: measurements[0] || null };
+}
+
+function normalizePatientInput(input) {
+  const name = typeof input?.name === 'string' ? input.name.trim() : '';
+  const email = typeof input?.email === 'string' ? input.email.trim().toLowerCase() : '';
+  const phone = typeof input?.phone === 'string' ? input.phone.trim() : '';
+  const phoneNormalized = phone.replace(/\D/g, '');
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  if (!name || name.length > 100) throw new Error('Enter a patient name of up to 100 characters.');
+  if (email && (email.length > 254 || !emailPattern.test(email))) throw new Error('Enter a valid email address.');
+  if (phone && (phone.length > 32 || phoneNormalized.length < 6 || phoneNormalized.length > 20)) throw new Error('Enter a valid phone number.');
+  if (!email && !phone) throw new Error('Add an email address or phone number so this patient can be identified.');
+
+  return { name, email: email || undefined, emailNormalized: email || undefined, phone: phone || undefined, phoneNormalized: phoneNormalized || undefined };
+}
+
+function normalizeMeasurementInput(input) {
+  const dateValue = typeof input?.date === 'string' ? input.date.trim() : '';
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(dateValue) ? new Date(`${dateValue}T00:00:00.000Z`) : null;
+  if (!date || Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== dateValue) {
+    throw new Error('Choose a valid measurement date.');
+  }
+
+  const fields = [
+    ['weightKg', 'Weight', 1, 500],
+    ['bmi', 'BMI', 5, 100],
+    ['bodyFatPercentage', 'Body fat percentage', 0, 80],
+    ['visceralFat', 'Visceral fat', 0, 100],
+    ['waistCircumferenceCm', 'Waist circumference', 20, 250],
+  ];
+  const measurement = { date };
+  for (const [field, label, minimum, maximum] of fields) {
+    const value = Number(input?.[field]);
+    if (input?.[field] === '' || input?.[field] === null || input?.[field] === undefined || !Number.isFinite(value) || value < minimum || value > maximum) {
+      throw new Error(`${label} must be between ${minimum} and ${maximum}.`);
+    }
+    measurement[field] = value;
+  }
+
+  const notes = typeof input?.notes === 'string' ? input.notes.trim() : '';
+  if (notes.length > 500) throw new Error('Visit notes must be 500 characters or fewer.');
+  measurement.notes = notes;
+  return measurement;
+}
+
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
@@ -329,6 +405,116 @@ app.post('/api/admin/logout', (_req, res) => {
   setAdminCookie(res, '', 0);
   res.setHeader('Cache-Control', 'no-store');
   return res.status(204).end();
+});
+
+app.get('/api/admin/patients', adminAuth, async (req, res) => {
+  const patientId = typeof req.query.patientId === 'string' ? req.query.patientId : '';
+  const search = typeof req.query.search === 'string' ? req.query.search.trim().slice(0, 100) : '';
+  const page = Math.min(Math.max(Number.parseInt(req.query.page, 10) || 1, 1), 100000);
+  const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 25, 1), 100);
+
+  if (patientId && !mongoose.isValidObjectId(patientId)) return res.status(400).json({ message: 'Choose a valid patient.' });
+
+  try {
+    await connectToDatabase();
+    if (patientId) {
+      const patient = await Patient.findById(patientId).lean();
+      if (!patient) return res.status(404).json({ message: 'Patient not found.' });
+      return res.json({ patient: serializePatient(patient) });
+    }
+
+    const filter = search ? {
+      $or: [
+        { name: new RegExp(escapeRegex(search), 'i') },
+        { email: new RegExp(escapeRegex(search), 'i') },
+        { phone: new RegExp(escapeRegex(search), 'i') },
+      ],
+    } : {};
+    const [patients, total] = await Promise.all([
+      Patient.find(filter).sort({ updatedAt: -1, _id: -1 }).skip((page - 1) * limit).limit(limit).lean(),
+      Patient.countDocuments(filter),
+    ]);
+
+    return res.json({
+      patients: patients.map(serializePatient),
+      page,
+      limit,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / limit)),
+    });
+  } catch (error) {
+    console.error('Unable to load patient records:', error.message);
+    return res.status(503).json({ message: 'Patient records are temporarily unavailable.' });
+  }
+});
+
+app.post('/api/admin/patients', adminAuth, async (req, res) => {
+  let patientDetails;
+  try {
+    patientDetails = normalizePatientInput(req.body);
+  } catch (error) {
+    return res.status(400).json({ message: error.message || 'Check the patient details and try again.' });
+  }
+
+  try {
+    await connectToDatabase();
+    const identifiers = [];
+    if (patientDetails.emailNormalized) identifiers.push({ emailNormalized: patientDetails.emailNormalized });
+    if (patientDetails.phoneNormalized) identifiers.push({ phoneNormalized: patientDetails.phoneNormalized });
+    const existingPatient = identifiers.length ? await Patient.findOne({ $or: identifiers }).select('_id').lean() : null;
+    if (existingPatient) return res.status(409).json({ message: 'A patient with this email address or phone number is already on the register.' });
+
+    const patient = await Patient.create(patientDetails);
+    return res.status(201).json({ patient: serializePatient(patient.toObject()) });
+  } catch (error) {
+    console.error('Unable to create patient record:', error.message);
+    return res.status(503).json({ message: 'The patient record could not be saved right now.' });
+  }
+});
+
+app.post('/api/admin/patients/measurements', adminAuth, async (req, res) => {
+  const patientId = typeof req.query.patientId === 'string' ? req.query.patientId : '';
+  if (!mongoose.isValidObjectId(patientId)) return res.status(400).json({ message: 'Choose a valid patient.' });
+
+  let measurement;
+  try {
+    measurement = normalizeMeasurementInput(req.body);
+  } catch (error) {
+    return res.status(400).json({ message: error.message || 'Check the measurements and try again.' });
+  }
+
+  try {
+    await connectToDatabase();
+    const patient = await Patient.findById(patientId);
+    if (!patient) return res.status(404).json({ message: 'Patient not found.' });
+    patient.measurements.push(measurement);
+    await patient.save();
+    return res.status(201).json({ patient: serializePatient(patient.toObject()) });
+  } catch (error) {
+    console.error('Unable to add patient measurement:', error.message);
+    return res.status(503).json({ message: 'The measurement could not be saved right now.' });
+  }
+});
+
+app.delete('/api/admin/patients/measurements', adminAuth, async (req, res) => {
+  const patientId = typeof req.query.patientId === 'string' ? req.query.patientId : '';
+  const measurementId = typeof req.query.measurementId === 'string' ? req.query.measurementId : '';
+  if (!mongoose.isValidObjectId(patientId) || !mongoose.isValidObjectId(measurementId)) {
+    return res.status(400).json({ message: 'Choose a valid patient measurement.' });
+  }
+
+  try {
+    await connectToDatabase();
+    const patient = await Patient.findById(patientId);
+    if (!patient) return res.status(404).json({ message: 'Patient not found.' });
+    if (!patient.measurements.id(measurementId)) return res.status(404).json({ message: 'Measurement not found.' });
+    patient.measurements.pull(measurementId);
+    await patient.save();
+    return res.json({ patient: serializePatient(patient.toObject()) });
+  } catch (error) {
+    console.error('Unable to delete patient measurement:', error.message);
+    return res.status(503).json({ message: 'The measurement could not be removed right now.' });
+  }
 });
 
 app.get('/api/admin/overview', adminAuth, async (_req, res) => {

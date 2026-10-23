@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import {
   Activity,
+  ArrowDownRight,
+  ArrowUpRight,
   ArrowLeft,
   CalendarDays,
   CalendarHeart,
@@ -15,14 +17,32 @@ import {
   LogOut,
   Plus,
   RefreshCw,
+  Ruler,
   Save,
   Search,
+  Scale,
   ShieldCheck,
   Trash2,
+  UserRoundPlus,
   UsersRound,
 } from 'lucide-react';
 const PAGE_SIZE = 25;
 const BOOKING_STATUSES = ['pending', 'confirmed', 'completed', 'cancelled'];
+const MEASUREMENT_METRICS = [
+  { key: 'weightKg', label: 'Weight', unit: 'kg', digits: 1, min: 1, max: 500, step: 0.1 },
+  { key: 'bmi', label: 'BMI', unit: '', digits: 1, min: 5, max: 100, step: 0.1 },
+  { key: 'bodyFatPercentage', label: 'Body fat', unit: '%', digits: 1, min: 0, max: 80, step: 0.1 },
+  { key: 'visceralFat', label: 'Visceral fat', unit: 'level', digits: 1, min: 0, max: 100, step: 0.1 },
+  { key: 'waistCircumferenceCm', label: 'Waist', unit: 'cm', digits: 1, min: 20, max: 250, step: 0.1 },
+];
+
+function todayInPracticeTime() {
+  return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Africa/Harare' }).format(new Date());
+}
+
+function emptyMeasurementForm() {
+  return { date: todayInPracticeTime(), weightKg: '', bmi: '', bodyFatPercentage: '', visceralFat: '', waistCircumferenceCm: '', notes: '' };
+}
 
 async function readJson(response) {
   return response.json().catch(() => ({}));
@@ -59,6 +79,25 @@ export default function AdminApp() {
   const [contentSaving, setContentSaving] = useState(false);
   const [contentMessage, setContentMessage] = useState('');
   const [contentError, setContentError] = useState('');
+  const [patients, setPatients] = useState([]);
+  const [patientPage, setPatientPage] = useState(1);
+  const [patientTotalPages, setPatientTotalPages] = useState(1);
+  const [patientTotal, setPatientTotal] = useState(0);
+  const [patientSearchInput, setPatientSearchInput] = useState('');
+  const [activePatientSearch, setActivePatientSearch] = useState('');
+  const [selectedPatientId, setSelectedPatientId] = useState('');
+  const [selectedPatient, setSelectedPatient] = useState(null);
+  const [patientsLoading, setPatientsLoading] = useState(false);
+  const [selectedPatientLoading, setSelectedPatientLoading] = useState(false);
+  const [patientError, setPatientError] = useState('');
+  const [patientMessage, setPatientMessage] = useState('');
+  const [showPatientForm, setShowPatientForm] = useState(false);
+  const [patientForm, setPatientForm] = useState({ name: '', email: '', phone: '' });
+  const [patientSaving, setPatientSaving] = useState(false);
+  const [showMeasurementForm, setShowMeasurementForm] = useState(false);
+  const [measurementForm, setMeasurementForm] = useState(emptyMeasurementForm);
+  const [measurementSaving, setMeasurementSaving] = useState(false);
+  const [measurementMetric, setMeasurementMetric] = useState('weightKg');
 
   async function loadDashboard({ nextPage = page, nextStatus = statusFilter, nextSearch = activeSearch } = {}) {
     setLoading(true);
@@ -119,6 +158,157 @@ export default function AdminApp() {
     }
   }
 
+  async function loadPatient(patientId) {
+    if (!patientId) {
+      setSelectedPatientId('');
+      setSelectedPatient(null);
+      return false;
+    }
+
+    setSelectedPatientId(patientId);
+    setSelectedPatient(null);
+    setSelectedPatientLoading(true);
+    setPatientError('');
+    try {
+      const params = new URLSearchParams({ patientId });
+      const response = await fetch(`/api/admin/patients?${params.toString()}`, { cache: 'no-store' });
+      const data = await readJson(response);
+      if (response.status === 401) {
+        setAuthState('login');
+        return false;
+      }
+      if (!response.ok) throw new Error(data.message || 'This patient record could not be loaded.');
+      setSelectedPatientId(patientId);
+      setSelectedPatient(data.patient);
+      return true;
+    } catch (error) {
+      setPatientError(error.message || 'This patient record could not be loaded.');
+      return false;
+    } finally {
+      setSelectedPatientLoading(false);
+    }
+  }
+
+  async function loadPatients({ nextPage = patientPage, nextSearch = activePatientSearch, nextSelectedId = selectedPatientId } = {}) {
+    setPatientsLoading(true);
+    setPatientError('');
+    const params = new URLSearchParams({ page: String(nextPage), limit: String(PAGE_SIZE), search: nextSearch });
+    try {
+      const response = await fetch(`/api/admin/patients?${params.toString()}`, { cache: 'no-store' });
+      const data = await readJson(response);
+      if (response.status === 401) {
+        setAuthState('login');
+        return false;
+      }
+      if (!response.ok) throw new Error(data.message || 'Patient records could not be loaded.');
+
+      const nextPatients = data.patients || [];
+      setPatients(nextPatients);
+      setPatientPage(data.page || nextPage);
+      setPatientTotalPages(data.totalPages || 1);
+      setPatientTotal(data.total || 0);
+      setActivePatientSearch(nextSearch);
+      const nextPatient = nextPatients.find((patient) => patient._id === nextSelectedId) || nextPatients[0];
+      if (nextPatient) await loadPatient(nextPatient._id);
+      else {
+        setSelectedPatientId('');
+        setSelectedPatient(null);
+      }
+      return true;
+    } catch (error) {
+      setPatientError(error.message || 'Patient records could not be loaded.');
+      return false;
+    } finally {
+      setPatientsLoading(false);
+    }
+  }
+
+  async function createPatient(event) {
+    event.preventDefault();
+    setPatientSaving(true);
+    setPatientError('');
+    setPatientMessage('');
+    try {
+      const response = await fetch('/api/admin/patients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patientForm),
+      });
+      const data = await readJson(response);
+      if (response.status === 401) {
+        setAuthState('login');
+        return;
+      }
+      if (!response.ok) throw new Error(data.message || 'The patient could not be added.');
+      setPatientForm({ name: '', email: '', phone: '' });
+      setPatientSearchInput('');
+      setShowPatientForm(false);
+      setPatientMessage('Patient added. You can now record their first measurements.');
+      await loadPatients({ nextPage: 1, nextSearch: '', nextSelectedId: data.patient._id });
+    } catch (error) {
+      setPatientError(error.message || 'The patient could not be added.');
+    } finally {
+      setPatientSaving(false);
+    }
+  }
+
+  async function saveMeasurement(event) {
+    event.preventDefault();
+    if (!selectedPatientId) return;
+    setMeasurementSaving(true);
+    setPatientError('');
+    setPatientMessage('');
+    try {
+      const params = new URLSearchParams({ patientId: selectedPatientId });
+      const response = await fetch(`/api/admin/patients/measurements?${params.toString()}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(measurementForm),
+      });
+      const data = await readJson(response);
+      if (response.status === 401) {
+        setAuthState('login');
+        return;
+      }
+      if (!response.ok) throw new Error(data.message || 'The measurement could not be saved.');
+      setSelectedPatient(data.patient);
+      setMeasurementForm(emptyMeasurementForm());
+      setShowMeasurementForm(false);
+      setPatientMessage(`Measurements saved for ${data.patient.name}.`);
+      await loadPatients({ nextSelectedId: data.patient._id });
+    } catch (error) {
+      setPatientError(error.message || 'The measurement could not be saved.');
+    } finally {
+      setMeasurementSaving(false);
+    }
+  }
+
+  async function removeMeasurement(measurementId) {
+    if (!selectedPatientId || !window.confirm('Remove this measurement from the patient’s history?')) return;
+    setPatientError('');
+    setPatientMessage('');
+    try {
+      const params = new URLSearchParams({ patientId: selectedPatientId, measurementId });
+      const response = await fetch(`/api/admin/patients/measurements?${params.toString()}`, { method: 'DELETE' });
+      const data = await readJson(response);
+      if (response.status === 401) {
+        setAuthState('login');
+        return;
+      }
+      if (!response.ok) throw new Error(data.message || 'The measurement could not be removed.');
+      setSelectedPatient(data.patient);
+      setPatientMessage('Measurement removed from the patient’s history.');
+      await loadPatients({ nextSelectedId: data.patient._id });
+    } catch (error) {
+      setPatientError(error.message || 'The measurement could not be removed.');
+    }
+  }
+
+  function submitPatientSearch(event) {
+    event.preventDefault();
+    loadPatients({ nextPage: 1, nextSearch: patientSearchInput.trim(), nextSelectedId: '' });
+  }
+
   async function saveSiteContent(event) {
     event.preventDefault();
     setContentSaving(true);
@@ -175,6 +365,7 @@ export default function AdminApp() {
   function selectView(nextView) {
     setActiveView(nextView);
     if (nextView === 'content') loadSiteContent();
+    if (nextView === 'patients') loadPatients({ nextPage: 1, nextSearch: '', nextSelectedId: '' });
   }
 
   useEffect(() => {
@@ -236,6 +427,9 @@ export default function AdminApp() {
     await fetch('/api/admin/logout', { method: 'POST' }).catch(() => {});
     setOverview(null);
     setBookings([]);
+    setPatients([]);
+    setSelectedPatient(null);
+    setSelectedPatientId('');
     setLoginForm({ email: '', password: '' });
     setLoginError('');
     setAuthState('login');
@@ -455,6 +649,129 @@ export default function AdminApp() {
     );
   }
 
+  if (activeView === 'patients') {
+    const measurementHistory = selectedPatient?.measurements || [];
+    const latestMeasurement = measurementHistory[0] || null;
+    const previousMeasurement = measurementHistory[1] || null;
+    const activeMetric = MEASUREMENT_METRICS.find((metric) => metric.key === measurementMetric) || MEASUREMENT_METRICS[0];
+
+    return (
+      <AdminShell>
+        <AdminHeader activeView={activeView} onViewChange={selectView} onLogout={handleLogout} />
+        <main className="admin-main">
+          <div className="admin-page-heading admin-patient-page-heading">
+            <div>
+              <p className="admin-eyebrow">Clinical records</p>
+              <h1>Patient progress</h1>
+              <p className="admin-page-intro">Keep each visit’s measurements together and compare changes over time.</p>
+            </div>
+            <button className="admin-primary-button" onClick={() => { setShowPatientForm((visible) => !visible); setPatientError(''); setPatientMessage(''); }} type="button">
+              <UserRoundPlus size={16} /> {showPatientForm ? 'Close form' : 'Add patient'}
+            </button>
+          </div>
+
+          {patientError && <div className="admin-alert" role="alert">{patientError}</div>}
+          {patientMessage && <div className="admin-success-alert" role="status">{patientMessage}</div>}
+
+          {showPatientForm && (
+            <form className="admin-panel admin-patient-create" onSubmit={createPatient}>
+              <div className="admin-panel-heading admin-patient-form-heading">
+                <div><p className="admin-eyebrow">New record</p><h2>Patient details</h2></div>
+                <span className="admin-panel-icon"><UserRoundPlus size={18} /></span>
+              </div>
+              <div className="admin-content-fields">
+                <label className="admin-content-field"><span>Patient name</span><input autoComplete="name" maxLength="100" required value={patientForm.name} onChange={(event) => setPatientForm((current) => ({ ...current, name: event.target.value }))} /></label>
+                <label className="admin-content-field"><span>Email address</span><input autoComplete="email" maxLength="254" type="email" value={patientForm.email} onChange={(event) => setPatientForm((current) => ({ ...current, email: event.target.value }))} /></label>
+                <label className="admin-content-field"><span>Phone number</span><input autoComplete="tel" maxLength="32" type="tel" value={patientForm.phone} onChange={(event) => setPatientForm((current) => ({ ...current, phone: event.target.value }))} /><small>Add an email address or phone number to identify the patient.</small></label>
+              </div>
+              <div className="admin-patient-form-actions">
+                <span>Patient records are private to this admin area.</span>
+                <button className="admin-primary-button" disabled={patientSaving} type="submit"><Plus size={16} /> {patientSaving ? 'Adding patient…' : 'Save patient'}</button>
+              </div>
+            </form>
+          )}
+
+          <div className="admin-patient-toolbar">
+            <form className="admin-search-form" onSubmit={submitPatientSearch}>
+              <label className="admin-search-box"><Search size={16} /><input aria-label="Search patients" placeholder="Search name, email or phone" value={patientSearchInput} onChange={(event) => setPatientSearchInput(event.target.value)} /></label>
+              <button className="admin-search-button" type="submit">Search</button>
+            </form>
+            <span>{activePatientSearch ? `${patientTotal} matching ${patientTotal === 1 ? 'patient' : 'patients'}` : `${patientTotal} ${patientTotal === 1 ? 'patient' : 'patients'} on your register`}</span>
+          </div>
+
+          <div className="admin-patient-layout">
+            <aside className="admin-panel admin-patient-list-panel" aria-label="Patient register">
+              <div className="admin-patient-list-heading"><div><p className="admin-eyebrow">Your register</p><h2>Patients <span className="admin-count-pill">{patientTotal}</span></h2></div><span className="admin-panel-icon"><UsersRound size={18} /></span></div>
+              {patientsLoading && !patients.length ? <div className="admin-content-loading"><span className="admin-spinner" /> Loading patients…</div> : (
+                <div className="admin-patient-list">
+                  {patients.map((patient) => (
+                    <button className={`admin-patient-list-item ${selectedPatientId === patient._id ? 'active' : ''}`} key={patient._id} onClick={() => loadPatient(patient._id)} type="button">
+                      <span className="admin-patient-avatar" aria-hidden="true">{patient.name.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()}</span>
+                      <span className="admin-patient-list-copy"><strong>{patient.name}</strong><small>{patient.measurementCount || 0} {patient.measurementCount === 1 ? 'visit' : 'visits'} recorded</small><small>{patient.latestMeasurement ? `Latest · ${formatDate(patient.latestMeasurement.date)}` : 'No measurements yet'}</small></span>
+                    </button>
+                  ))}
+                  {!patients.length && <div className="admin-patient-empty-list"><UsersRound size={21} /><strong>{activePatientSearch ? 'No patients found' : 'Your register is ready'}</strong><span>{activePatientSearch ? 'Try a different name or contact detail.' : 'Add a patient to start keeping their progress together.'}</span></div>}
+                </div>
+              )}
+              <div className="admin-patient-pagination">
+                <span>Page {patientPage} of {patientTotalPages}</span>
+                <div><button disabled={patientPage <= 1 || patientsLoading} onClick={() => loadPatients({ nextPage: patientPage - 1, nextSelectedId: '' })} type="button"><ChevronLeft size={15} /> Previous</button><button disabled={patientPage >= patientTotalPages || patientsLoading} onClick={() => loadPatients({ nextPage: patientPage + 1, nextSelectedId: '' })} type="button">Next <ChevronRight size={15} /></button></div>
+              </div>
+            </aside>
+
+            <section className="admin-panel admin-patient-detail-panel" aria-label="Patient measurement history">
+              {selectedPatientLoading ? <div className="admin-content-loading"><span className="admin-spinner" /> Loading patient record…</div> : selectedPatient ? (
+                <>
+                  <div className="admin-patient-profile">
+                    <span className="admin-patient-avatar admin-patient-avatar-large" aria-hidden="true">{selectedPatient.name.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()}</span>
+                    <div className="admin-patient-profile-copy"><p className="admin-eyebrow">Patient file</p><h2>{selectedPatient.name}</h2><div className="admin-patient-contact">{selectedPatient.email && <a href={`mailto:${selectedPatient.email}`}>{selectedPatient.email}</a>}{selectedPatient.phone && <a href={`tel:${selectedPatient.phone}`}>{selectedPatient.phone}</a>}</div></div>
+                    <button className="admin-primary-button admin-patient-record-button" onClick={() => { setMeasurementForm(emptyMeasurementForm()); setShowMeasurementForm((visible) => !visible); setPatientError(''); setPatientMessage(''); }} type="button"><Plus size={16} /> {showMeasurementForm ? 'Close entry' : 'Record visit'}</button>
+                  </div>
+
+                  {showMeasurementForm && (
+                    <form className="admin-patient-measurement-form" onSubmit={saveMeasurement}>
+                      <div className="admin-panel-heading admin-patient-form-heading"><div><p className="admin-eyebrow">New visit</p><h2>Measurements</h2></div><span className="admin-panel-icon"><Scale size={18} /></span></div>
+                      <label className="admin-content-field admin-measurement-date"><span>Visit date</span><input type="date" required value={measurementForm.date} onChange={(event) => setMeasurementForm((current) => ({ ...current, date: event.target.value }))} /></label>
+                      <div className="admin-patient-measurement-fields">
+                        {MEASUREMENT_METRICS.map((metric) => <label className="admin-content-field" key={metric.key}><span>{metric.label}{metric.unit ? ` (${metric.unit})` : ''}</span><input type="number" inputMode="decimal" min={metric.min} max={metric.max} step={metric.step} required value={measurementForm[metric.key]} onChange={(event) => setMeasurementForm((current) => ({ ...current, [metric.key]: event.target.value }))} /></label>)}
+                        <label className="admin-content-field admin-content-field-wide"><span>Visit notes <small>(optional)</small></span><textarea maxLength="500" rows="2" placeholder="Add a brief note for this visit" value={measurementForm.notes} onChange={(event) => setMeasurementForm((current) => ({ ...current, notes: event.target.value }))} /></label>
+                      </div>
+                      <div className="admin-patient-form-actions"><span>All five measurements are saved with the visit date.</span><button className="admin-primary-button" disabled={measurementSaving} type="submit"><Save size={15} /> {measurementSaving ? 'Saving measurements…' : 'Save measurements'}</button></div>
+                    </form>
+                  )}
+
+                  <div className="admin-patient-section-heading"><div><p className="admin-eyebrow">Latest assessment</p><h3>{latestMeasurement ? `Recorded ${formatDate(latestMeasurement.date)}` : 'No measurements recorded yet'}</h3></div><span className="admin-patient-visit-count"><CalendarDays size={15} /> {measurementHistory.length} {measurementHistory.length === 1 ? 'visit' : 'visits'}</span></div>
+                  <div className="admin-patient-metric-grid">
+                    {MEASUREMENT_METRICS.map((metric) => <MeasurementMetricCard key={metric.key} metric={metric} value={latestMeasurement?.[metric.key]} previousValue={previousMeasurement?.[metric.key]} />)}
+                  </div>
+
+                  <div className="admin-panel admin-patient-chart-panel">
+                    <div className="admin-panel-heading admin-patient-chart-heading"><div><p className="admin-eyebrow">Visit comparison</p><h3>Measurement trend</h3></div><label className="admin-patient-metric-select"><span>Compare</span><select aria-label="Choose a measurement to compare" value={measurementMetric} onChange={(event) => setMeasurementMetric(event.target.value)}>{MEASUREMENT_METRICS.map((metric) => <option value={metric.key} key={metric.key}>{metric.label}</option>)}</select></label></div>
+                    <PatientMeasurementChart measurements={measurementHistory} metric={activeMetric} />
+                  </div>
+
+                  <div className="admin-patient-history-heading"><div><p className="admin-eyebrow">Full record</p><h3>Measurement history</h3></div><span>{measurementHistory.length ? 'Most recent first' : 'New visits will appear here'}</span></div>
+                  <div className="admin-table-wrap admin-patient-history-wrap">
+                    <table className="admin-bookings-table admin-patient-history-table">
+                      <thead><tr><th>Visit date</th><th>Weight</th><th>BMI</th><th>Body fat</th><th>Visceral fat</th><th>Waist</th><th><span className="sr-only">Remove measurement</span></th></tr></thead>
+                      <tbody>
+                        {measurementHistory.map((measurement) => <tr key={measurement._id}><td><strong className="admin-client-name">{formatDate(measurement.date)}</strong>{measurement.notes && <small className="admin-measurement-note" title={measurement.notes}>{measurement.notes}</small>}</td><td>{formatMetricValue(measurement.weightKg, MEASUREMENT_METRICS[0])}</td><td>{formatMetricValue(measurement.bmi, MEASUREMENT_METRICS[1])}</td><td>{formatMetricValue(measurement.bodyFatPercentage, MEASUREMENT_METRICS[2])}</td><td>{formatMetricValue(measurement.visceralFat, MEASUREMENT_METRICS[3])}</td><td>{formatMetricValue(measurement.waistCircumferenceCm, MEASUREMENT_METRICS[4])}</td><td><button className="admin-remove-measurement-button" aria-label={`Remove measurements from ${formatDate(measurement.date)}`} onClick={() => removeMeasurement(measurement._id)} type="button"><Trash2 size={14} /></button></td></tr>)}
+                        {!measurementHistory.length && <tr><td className="admin-empty-state" colSpan="7">Record the first visit to start comparing this patient’s progress.</td></tr>}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              ) : (
+                <div className="admin-patient-detail-empty"><span className="admin-note-icon"><Ruler size={18} /></span><p className="admin-eyebrow">Progress, recorded</p><h2>{patients.length ? 'Select a patient' : 'Start a patient register'}</h2><p>{patients.length ? 'Choose a name from the register to review their measurements and changes over time.' : 'Add your first patient, then record measurements at each visit to build a clear history.'}</p>{!patients.length && <button className="admin-primary-button" onClick={() => setShowPatientForm(true)} type="button"><UserRoundPlus size={16} /> Add first patient</button>}</div>
+              )}
+            </section>
+          </div>
+          <footer className="admin-footer"><span>Nutrition with Linda</span><span>Patient records are accessible only after admin sign-in.</span></footer>
+        </main>
+      </AdminShell>
+    );
+  }
+
   const trend = overview?.monthlyTrend || [];
   const maxTrend = Math.max(1, ...trend.map((entry) => entry.count));
 
@@ -574,6 +891,65 @@ function KpiCard({ icon: Icon, label, value, detail }) {
   );
 }
 
+function formatMetricValue(value, metric) {
+  if (value === null || value === undefined || value === '') return '—';
+  const number = Number(value);
+  if (!Number.isFinite(number)) return '—';
+  return `${number.toFixed(metric.digits)}${metric.unit ? ` ${metric.unit}` : ''}`;
+}
+
+function MeasurementMetricCard({ metric, value, previousValue }) {
+  const hasPrevious = previousValue !== null && previousValue !== undefined;
+  const hasValue = value !== null && value !== undefined;
+  const change = hasPrevious && hasValue ? Number(value) - Number(previousValue) : 0;
+  const ChangeIcon = change > 0 ? ArrowUpRight : ArrowDownRight;
+  const Icon = metric.key === 'weightKg' ? Scale : metric.key === 'waistCircumferenceCm' ? Ruler : Activity;
+
+  return (
+    <article className="admin-patient-metric-card">
+      <div className="admin-patient-metric-title"><span className="admin-kpi-icon"><Icon size={17} strokeWidth={1.8} /></span><span>{metric.label}</span></div>
+      <strong>{formatMetricValue(value, metric)}</strong>
+      <small className={hasPrevious ? 'admin-measurement-change' : 'admin-measurement-change muted'}>
+        {hasPrevious ? <><ChangeIcon size={13} /> {change === 0 ? 'Unchanged at prior visit' : `${formatMetricValue(Math.abs(change), metric)} ${change > 0 ? 'higher' : 'lower'} than prior visit`}</> : hasValue ? 'First recorded visit' : 'Not yet recorded'}
+      </small>
+    </article>
+  );
+}
+
+function PatientMeasurementChart({ measurements, metric }) {
+  const chronologicalMeasurements = [...measurements].sort((left, right) => new Date(left.date) - new Date(right.date));
+  const values = chronologicalMeasurements.map((measurement) => Number(measurement[metric.key])).filter(Number.isFinite);
+  if (!values.length) return <div className="admin-patient-chart-empty"><Activity size={19} /><span>Record a visit to see this measurement over time.</span></div>;
+
+  const valueRange = Math.max(...values) - Math.min(...values);
+  const paddedRange = valueRange || Math.max(Math.abs(values[0]) * 0.12, 1);
+  const lowerBound = Math.min(...values) - paddedRange * 0.18;
+  const upperBound = Math.max(...values) + paddedRange * 0.18;
+  const points = values.map((value, index) => ({
+    x: values.length === 1 ? 330 : 54 + (index / (values.length - 1)) * 552,
+    y: 180 - ((value - lowerBound) / (upperBound - lowerBound)) * 145,
+    value,
+    date: chronologicalMeasurements[index]?.date,
+  }));
+  const linePath = points.map((point, index) => `${index ? 'L' : 'M'} ${point.x} ${point.y}`).join(' ');
+  const areaPath = points.length > 1 ? `${linePath} L ${points[points.length - 1].x} 192 L ${points[0].x} 192 Z` : '';
+  const dateLabel = (value) => new Intl.DateTimeFormat('en-ZW', { month: 'short', day: 'numeric', timeZone: 'Africa/Harare' }).format(new Date(value));
+
+  return (
+    <div className="admin-patient-chart">
+      <div className="admin-patient-chart-values"><span>{formatMetricValue(Math.max(...values), metric)}</span><span>{formatMetricValue(Math.min(...values), metric)}</span></div>
+      <svg viewBox="0 0 640 210" role="img" aria-label={`${metric.label} trend across ${points.length} visits`} preserveAspectRatio="none">
+        {[35, 83, 131, 179].map((y) => <line key={y} x1="45" y1={y} x2="600" y2={y} className="admin-patient-chart-gridline" />)}
+        {areaPath && <path d={areaPath} className="admin-patient-chart-area" />}
+        {points.length > 1 && <path d={linePath} className="admin-patient-chart-line" />}
+        {points.map((point, index) => <circle key={`${point.date}-${index}`} cx={point.x} cy={point.y} r="4.5" className="admin-patient-chart-point"><title>{`${dateLabel(point.date)}: ${formatMetricValue(point.value, metric)}`}</title></circle>)}
+      </svg>
+      <div className="admin-patient-chart-dates"><span>{dateLabel(chronologicalMeasurements[0].date)}</span>{points.length > 1 && <span>{dateLabel(chronologicalMeasurements[chronologicalMeasurements.length - 1].date)}</span>}</div>
+      <p>{points.length === 1 ? 'One visit recorded · add another visit to compare change.' : `${points.length} visits recorded · showing oldest to most recent.`}</p>
+    </div>
+  );
+}
+
 function AdminHeader({ activeView, onViewChange, onLogout }) {
   return (
     <header className="admin-header">
@@ -583,6 +959,7 @@ function AdminHeader({ activeView, onViewChange, onLogout }) {
       </a>
       <nav className="admin-view-tabs" aria-label="Dashboard sections">
         <button className={activeView === 'dashboard' ? 'admin-view-tab active' : 'admin-view-tab'} onClick={() => onViewChange('dashboard')} type="button">Bookings</button>
+        <button className={activeView === 'patients' ? 'admin-view-tab active' : 'admin-view-tab'} onClick={() => onViewChange('patients')} type="button">Patients</button>
         <button className={activeView === 'content' ? 'admin-view-tab active' : 'admin-view-tab'} onClick={() => onViewChange('content')} type="button">Website content</button>
       </nav>
       <div className="admin-header-actions">

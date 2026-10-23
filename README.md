@@ -25,7 +25,7 @@ Open `/admin` on the deployed site. The dashboard is protected by a single admin
 
 Redeploy after setting the variables. The dashboard shows total and pending requests, upcoming consultations, requests this month, a six-month trend, and a searchable, paginated booking list. Admins can update request statuses. Existing bookings without a status appear as pending.
 
-The dashboard's **Website content** section lets the admin edit the public homepage, consultation details, service cards, price, booking messages, phone and address, and WhatsApp contact. This content is stored in MongoDB and appears in server-rendered HTML the next time a visitor opens the page, without a code change or redeployment. If the database is unavailable, the site can still render its built-in default content.
+The dashboard's **Patients** section keeps a private patient register in MongoDB. Add a patient and record a dated visit with weight, BMI, body fat percentage, visceral fat, waist circumference, and optional notes. The patient view includes visit history and charts for comparing each measurement over time. Search the register by name or contact details. The **Website content** section lets the admin edit the public homepage, consultation details, service cards, price, booking messages, phone and address, and WhatsApp contact. This content is stored in MongoDB and appears in server-rendered HTML the next time a visitor opens the page, without a code change or redeployment. If the database is unavailable, the site can still render its built-in default content.
 
 The admin API uses an HTTP-only, secure production session cookie. The password and session secret must stay in Vercel's sensitive environment settings and must never be committed to Git.
 
