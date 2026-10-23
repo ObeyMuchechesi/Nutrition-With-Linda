@@ -4,6 +4,14 @@
   "buildCommand": "npm run build",
   "rewrites": [
     {
+      "source": "/api/admin/patients/measurements",
+      "destination": "/api/admin/bookings?patientAction=measurements"
+    },
+    {
+      "source": "/api/admin/patients",
+      "destination": "/api/admin/bookings?patientAction=patients"
+    },
+    {
       "source": "/api/admin/bookings/:bookingId/status",
       "destination": "/api/admin/bookings/status?bookingId=:bookingId"
     }
